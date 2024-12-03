@@ -5,6 +5,7 @@ use std::{env, fs};
 
 mod day01;
 mod day02;
+mod day03;
 
 fn run(day: &String, input: &String) {
     let part_1;
@@ -15,6 +16,9 @@ fn run(day: &String, input: &String) {
         }
         "day02" => {
             (part_1, part_2) = day02::solve(input);
+        }
+        "day03" => {
+            (part_1, part_2) = day03::solve(input);
         }
         _ => {
             println!("No solution for this {} yet!", day);
