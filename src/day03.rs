@@ -1,39 +1,42 @@
+use std::{
+    sync::{Arc, Mutex},
+    thread,
+};
+
+use once_cell::sync::Lazy;
+use rayon::prelude::*;
+
 use regex::Regex;
 
-/// That's my template for new days. Includes the solve function signature and a test function
+// Find all occurrences of `mul(n,m)` where n and m are integers
+// and we return the integers n and m as captured groups
+static MUL_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"mul\((\d+),(\d+)\)").unwrap());
+
 pub fn solve(filename: &String) -> (i64, i64) {
     let input = std::fs::read_to_string(filename).expect("Could not read file!");
     day_03(&input)
 }
 
 fn calculate_sum_of_mul(input_data: &String) -> i64 {
-    let mut result = 0;
+    // This lets the function sleep for 1 ms to simulate a slow calculation
+    // uncomment to try it out
+    // thread::sleep(std::time::Duration::from_millis(1));
 
-    // Find all occurrences of `mul( n , m )` where n and m are integers
-    // and whitespace is allowed between the numbers (not sure if needed)
-    let re = Regex::new(r"mul\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)").unwrap();
+    MUL_REGEX
+        .captures_iter(input_data)
+        .filter_map(|cap| {
+            // The captures contains the 2 blocks of digits
+            let first = cap[1].parse::<i64>().unwrap();
+            let second = cap[2].parse::<i64>().unwrap();
 
-    for mat in re.find_iter(input_data) {
-        // Split the match at the `,`` which leaves `mul(n` and `m)`, then split each
-        // block at the brackets to get the numbers
-        let first = mat.as_str().split(",").collect::<Vec<&str>>()[0]
-            .split("(")
-            .collect::<Vec<&str>>()[1]
-            .parse::<i64>()
-            .unwrap();
-        let second = mat.as_str().split(",").collect::<Vec<&str>>()[1]
-            .split(")")
-            .collect::<Vec<&str>>()[0]
-            .parse::<i64>()
-            .unwrap();
-
-        result += first * second;
-    }
-
-    result
+            Some(first * second)
+        })
+        .sum()
 }
 
-fn calculate_conditional_sum_of_mul(input_data: &String) -> i64 {
+// Find all substrings between `do()` and `don't()` where we assume that
+// we start with a `do()` sequence.
+fn get_substrings(input_data: &String) -> Vec<String> {
     let mut do_substrings = Vec::new();
 
     let mut start_index = 0;
@@ -41,25 +44,72 @@ fn calculate_conditional_sum_of_mul(input_data: &String) -> i64 {
     let mut end_index;
     while start_index < input_data.len() {
         if do_enabled {
-            // we could add +7 here to have the regex search string without the don't(), but meh
             end_index = input_data[start_index..]
                 .find("don't()")
-                .map(|i| start_index + i);
+                // we add 7 because we don't need the length of `don't()`
+                .map(|i| start_index + i + 7);
             // if we don't find a match, we take the rest of the input data
             let end_index = end_index.unwrap_or(input_data.len());
+
             let substring = input_data[start_index..end_index].to_string();
             do_substrings.push(substring);
+
             start_index = end_index;
             do_enabled = false;
         } else {
             end_index = input_data[start_index..]
                 .find("do()")
-                .map(|i| start_index + i);
+                // we add 4 because we don't need the length of `do()`
+                .map(|i| start_index + i + 4);
             let end_index = end_index.unwrap_or(input_data.len());
             start_index = end_index;
             do_enabled = true;
         }
     }
+    do_substrings
+}
+
+// Manually create threads and run each substring in a separate thread
+// Use a mutex to lock the sum variable and Arc to share it between threads
+fn calculate_conditional_sum_of_mul_manual_multithreading(input_data: &String) -> i64 {
+    let do_substrings = get_substrings(input_data);
+
+    let sum = Arc::new(Mutex::new(0));
+    let handles: Vec<_> = do_substrings
+        .into_iter()
+        .map(|s| {
+            let sum = Arc::clone(&sum);
+            thread::spawn(move || {
+                let result = calculate_sum_of_mul(&s);
+                let mut sum_reference = sum.lock().unwrap();
+                *sum_reference += result;
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+
+    let result = *sum.lock().unwrap();
+    result
+}
+
+// Use rayon to parallelize the calculation of the sum
+fn calculate_conditional_sum_of_mul(input_data: &String) -> i64 {
+    let do_substrings = get_substrings(input_data);
+
+    do_substrings
+        // this is the rayon parallel iterator, will take care of everything
+        .par_iter()
+        .map(|s| calculate_sum_of_mul(s))
+        .sum()
+}
+
+// Simple sequential calculation of the sum of products
+fn calculate_conditional_sum_of_mul_sequentially(input_data: &String) -> i64 {
+    let do_substrings = get_substrings(input_data);
+
     do_substrings.iter().map(|s| calculate_sum_of_mul(s)).sum()
 }
 
@@ -92,20 +142,44 @@ mod tests {
     }
 
     #[bench]
-    fn bench_day03_part1(b: &mut Bencher) {
+    fn bench_day03_calc_sum_of_mul(b: &mut Bencher) {
         let filename = "data/day03.txt";
         let input = std::fs::read_to_string(filename).expect("Could not read file!");
         b.iter(|| {
             calculate_sum_of_mul(&input);
         });
     }
+
     #[bench]
-    fn bench_day03_part2(b: &mut Bencher) {
+    fn bench_day03_substrings_parallel(b: &mut Bencher) {
         let filename = "data/day03.txt";
         let input = std::fs::read_to_string(filename).expect("Could not read file!");
+        MUL_REGEX.as_str();
 
         b.iter(|| {
             calculate_conditional_sum_of_mul(&input);
+        });
+    }
+
+    #[bench]
+    fn bench_day03_substrings_sequentially(b: &mut Bencher) {
+        let filename = "data/day03.txt";
+        let input = std::fs::read_to_string(filename).expect("Could not read file!");
+        MUL_REGEX.as_str();
+
+        b.iter(|| {
+            calculate_conditional_sum_of_mul_sequentially(&input);
+        });
+    }
+
+    #[bench]
+    fn bench_day03_substrings_test_manual_implementation(b: &mut Bencher) {
+        let filename = "data/day03.txt";
+        let input = std::fs::read_to_string(filename).expect("Could not read file!");
+        MUL_REGEX.as_str();
+
+        b.iter(|| {
+            calculate_conditional_sum_of_mul_manual_multithreading(&input);
         });
     }
 }
