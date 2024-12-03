@@ -13,6 +13,6 @@ cargo test
 To run individual days:
 
 ```bash
-cargo run dayn input
+cargo run dayn inputfile
 ```
-where day_n_ is the day and the input is either a .txt file or a string input, depending on the day.
+where dayn is the day, e.g. `day03` for day 3, and the input is either a .txt file or a string input, depending on the day.
