@@ -29,7 +29,7 @@ mod tests {
             "...".to_string(),
         ]
         .join("\n");
-        let (output_1, output_2) = solve(&input);
+        let (output_1, output_2) = day_xx(&input);
         assert_eq!(result_1, output_1);
         assert_eq!(result_2, output_2);
     }
