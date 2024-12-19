@@ -1,37 +1,63 @@
 #![feature(array_chunks)]
 #![feature(test)]
 mod my_io;
-use std::{env, fs};
+mod shared_objects;
+use std::{collections::HashMap, env, fs};
+
+use once_cell::sync::Lazy;
 
 mod day01;
 mod day02;
 mod day03;
 mod day04;
 mod day05;
+mod day06;
+mod day07;
+mod day08;
+mod day09;
+mod day10;
+mod day11;
+
+static DAY_MAP: Lazy<HashMap<&'static str, for<'a> fn(&'a String) -> (i64, i64)>> =
+    Lazy::new(|| {
+        let mut m: HashMap<&'static str, for<'a> fn(&'a String) -> (i64, i64)> = HashMap::new();
+        m.insert("day01", day01::solve);
+        m.insert("day02", day02::solve);
+        m.insert("day03", day03::solve);
+        m.insert("day04", day04::solve);
+        m.insert("day05", day05::solve);
+        m.insert("day06", day06::solve);
+        m.insert("day07", day07::solve);
+        m.insert("day08", day08::solve);
+        m.insert("day09", day09::solve);
+        m.insert("day10", day10::solve);
+        m.insert("day11", day11::solve);
+        // m.insert("day12", day12::solve);
+        // m.insert("day13", day13::solve);
+        // m.insert("day14", day14::solve);
+        // m.insert("day15", day15::solve);
+        // m.insert("day16", day16::solve);
+        // m.insert("day17", day17::solve);
+        // m.insert("day18", day18::solve);
+        // m.insert("day19", day19::solve);
+        // m.insert("day20", day20::solve);
+        // m.insert("day21", day21::solve);
+        // m.insert("day22", day22::solve);
+        // m.insert("day23", day23::solve);
+        // m.insert("day24", day24::solve);
+        // m.insert("day25", day25::solve);
+        m
+    });
 
 fn run(day: &String, input: &String) {
     let part_1;
     let part_2;
-    match day.as_str() {
-        "day01" => {
-            (part_1, part_2) = day01::solve(input);
-        }
-        "day02" => {
-            (part_1, part_2) = day02::solve(input);
-        }
-        "day03" => {
-            (part_1, part_2) = day03::solve(input);
-        }
-        "day04" => {
-            (part_1, part_2) = day04::solve(input);
-        }
-        "day05" => {
-            (part_1, part_2) = day05::solve(input);
-        }
-        _ => {
-            println!("No solution for this {} yet!", day);
-            return;
-        }
+
+    if let Some(day_function) = DAY_MAP.get(day.as_str()) {
+        (part_1, part_2) = day_function(input);
+    } else {
+        println!("Day {} not implemented yet", day);
+        return;
     }
     println!(
         "{}: Part 1: {}, Part 2: {}",
